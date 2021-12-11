@@ -14,5 +14,5 @@
     * 'g' to generate a password
     * 'e' to echo a password
     * 'l' to list passwords
-    * 'b' to create an archive for backup
-    * 'r' to restore an archive from a backup
+    * 'b' to create an archive for backup (Optional: when not using git)
+    * 'r' to restore an archive from a backup (Optional: when not using git)
