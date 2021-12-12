@@ -13,6 +13,6 @@
     * 'w' to write a password
     * 'g' to generate a password
     * 'p' to print a password
-    * 'l' to list passwords
+    * 'l' to list passwords (tree type format)
     * 'b' to create an archive for backup (Optional: when not using git)
     * 'r' to restore an archive from a backup (Optional: when not using git)
