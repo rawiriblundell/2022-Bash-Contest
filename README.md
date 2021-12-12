@@ -4,7 +4,7 @@
    * 1st January 2022 (start)
    * 28th January 2022 (end)
 
-## Concept idea of this project.
+## Concept idea of this project. [Example to expand](example/tbpm)
 
    * Bash shell script to manage passwords with GnuPG asymmetric encryption.
    * Designed and recommended to be used with Yubikey as the secret key storage. (Optional)
