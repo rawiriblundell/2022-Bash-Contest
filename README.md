@@ -12,7 +12,7 @@
 
     * 'w' to write a password
     * 'g' to generate a password
-    * 'e' to echo a password
+    * 'p' to print a password
     * 'l' to list passwords
     * 'b' to create an archive for backup (Optional: when not using git)
     * 'r' to restore an archive from a backup (Optional: when not using git)
