@@ -55,6 +55,7 @@ msg () {
 
     local mesg=$1; shift
     printf "${colGreen}==>${txtClean}${txtBold} %s${txtClean}\n" "$mesg" "$@"
+    exit 0
 }
 
 #=== FUNCTION =================================================================
@@ -68,6 +69,22 @@ error() {
 
     local mesg=$1; shift
     printf "${colRed}==> ERROR:${txtClean}${txtBold} %s${txtClean}\n" "$mesg" "$@" >&2
+    exit 1
+
+}
+
+#=== FUNCTION =================================================================
+#        Name: yesno
+# Description: Print message with a yes or no responce.
+# Parameter 1: Message to print.
+#==============================================================================
+
+yesno() {
+
+	[[ -t 0 ]] || return 0
+	local response
+	read -r -p "$1 [y/N] " response
+	[[ $response == [yY] ]] || exit 1
 
 }
 
@@ -86,7 +103,8 @@ initialize() {
 
     if [[ $# -lt 2 ]]; then
         error "Not enough parameters supplied"
-        return 1
+    elif [[ $# -gt 2 ]]; then
+        error "Too many parameters supplied."
     else
         shift
     fi
@@ -100,25 +118,25 @@ initialize() {
 
     if [ -z $gpg_key ]; then
         error "valid GPG does not exist!"
-        return 1
     else
         echo $gpg_key > $passDir/.gpg_key
         msg "GPG '${gpg_key}' has been saved to ${passDir}/.gpg_key"
-        return 1
     fi
+    exit
 }
 
 #=== FUNCTION =================================================================
 #        Name: write
 # Description: Write a password to the password manager.
 # Parameter 1: the file name without .gpg.
-# Parameter 1: the password for ther file.
+# Parameter 2: the password for ther file.
 #==============================================================================
 
 write() {
     if [[ $# -lt 3 ]]; then
         error "Not enough parameters supplied"
-        return 1
+    elif [[ $# -gt 3 ]]; then
+        error "Too many parameters supplied."
     else
         shift
     fi
@@ -130,10 +148,8 @@ write() {
     if [[ -f "${passDir}/${passfile}.gpg" ]]; then
         if [[ -f $passDir/.gpg_key ]]; then
             error "That password file already exists."
-            return 1
         else
             error "valid GPG does not exist!"
-            return 1
         fi
     else
         if [[ -f $passDir/.gpg_key ]]; then
@@ -141,12 +157,12 @@ write() {
             echo -e "${password}" > /tmp/${passfile_temp}
             gpg ${GPG_OPTS} --output ${passDir}/${passfile}.gpg --encrypt --recipient ${gpg_key} /tmp/${passfile_temp}
             rm -f /tmp/${passfile_temp}
-            return 1
+            msg "Password '${password}' has been saved to ${passDir}/${passfile}.gpg"
         else
             error "valid GPG does not exist!"
-            return 1
         fi
     fi
+    exit
 }
 
 #=== FUNCTION =================================================================
@@ -156,9 +172,121 @@ write() {
 #==============================================================================
 
 print() {
+    case $3 in
+		-c|--copy)
+            shift
+            copy $@
+            ;;
+	esac
+
     if [[ $# -lt 2 ]]; then
-        error "Not enough parameters supplied"
-        return 1
+        error "Not enough parameters supplied."
+    elif [[ $# -gt 2 ]]; then
+        error "Too many parameters supplied."
+    else
+        shift
+    fi
+
+    local passfile=${1%%-*}
+    local passfile_temp="${passfile}.tmp.${RANDOM}.${RANDOM}.${RANDOM}.${RANDOM}.--"
+
+    if [[ -f "${passDir}/${passfile}.gpg" ]]; then
+        if [[ -f $passDir/.gpg_key ]]; then
+            gpg ${GPG_OPTS} --output /tmp/${passfile_temp} --decrypt ${passDir}/${passfile}.gpg
+            password=$(cat /tmp/${passfile_temp})
+            printf "%s: %s\n" "${passfile}" "${password}"
+        else
+            error "valid GPG does not exist!"
+        fi
+    else
+        if [[ -f $passDir/.gpg_key ]]; then
+            error "That password file does not exists."
+        else
+            error "valid GPG does not exist!"
+        fi
+    fi
+    exit
+}
+
+#=== FUNCTION =================================================================
+#        Name: copy
+# Description: Copy a command from the print options.
+# Parameter 1: the file name without .gpg.
+#==============================================================================
+
+copy() {
+    if [[ $# -lt 2 ]]; then
+        error "Not enough parameters supplied."
+    elif [[ $# -gt 2 ]]; then
+        error "Too many parameters supplied."
+    fi
+
+    local passfile=${1%%-*}
+    local passfile_temp="${passfile}.tmp.${RANDOM}.${RANDOM}.${RANDOM}.${RANDOM}.--"
+
+    if [[ -f "${passDir}/${passfile}.gpg" ]]; then
+        if [[ -f $passDir/.gpg_key ]]; then
+            gpg ${GPG_OPTS} --output /tmp/${passfile_temp} --decrypt ${passDir}/${passfile}.gpg
+            password=$(cat /tmp/${passfile_temp})
+            if command -v clipmenu-ctl &> /dev/null; then
+                clipmenu-ctl disable
+                if [ $(clipmenu-ctl status) == "disabled" ]; then
+                    printf "%s\n" "${password%%$'\n'*}" | xclip -selection clipboard
+                fi
+                clipmenu-ctl enable
+            else
+                printf "%s\n" "${password%%$'\n'*}" | xclip -selection clipboard
+            fi
+        else
+            error "valid GPG does not exist!"
+        fi
+    else
+        if [[ -f $passDir/.gpg_key ]]; then
+            error "That password file does not exists."
+        else
+            error "valid GPG does not exist!"
+        fi
+    fi
+    exit
+}
+
+#=== FUNCTION =================================================================
+#        Name: list
+# Description: List the passwords from the password manager.
+#==============================================================================
+
+list() {
+    if [[ $# -lt 1 ]]; then
+        error "Not enough parameters supplied."
+    elif [[ $# -gt 1 ]]; then
+        error "Too many parameters supplied."
+    else
+        shift
+    fi
+
+    if [[ -f $passDir/.gpg_key ]]; then
+        printf "%s\n" "${COLORDESCRIPTION}"
+        while read -r; do
+            if [[ ! "$REPLY" == "$passDir" ]]; then
+                echo ${REPLY::-4}
+            fi
+        done <<< $( tree -N -l --noreport --prune --matchdirs --ignore-case "$passDir" )
+    else
+        error "valid GPG does not exist!"
+    fi
+    exit
+}
+
+#=== FUNCTION =================================================================
+#        Name: edit
+# Description: Edit a password from the password manager.
+#==============================================================================
+
+edit() {
+    if [[ $# -lt 2 ]]; then
+        error "Not enough parameters supplied."
+    elif [[ $# -gt 2 ]]; then
+        error "Too many parameters supplied."
     else
         shift
     fi
@@ -169,22 +297,72 @@ print() {
     if [[ -f "${passDir}/${passfile}.gpg" ]]; then
         if [[ -f $passDir/.gpg_key ]]; then
             gpg ${GPG_OPTS} --output /tmp/${passfile_temp} --decrypt ${passDir}/${passfile}.gpg
+            ${VISUAL:-vim} "/tmp/$passfile_temp"
             password=$(cat /tmp/${passfile_temp})
-            printf "%s: %s\n" "${passfile}" "${password}"
-            return 1
+	        [[ -f "/tmp/$passfile_temp" ]] || error "New password not saved."
+            gpg -d -o - ${GPG_OPTS} "${passDir}/${passfile}.gpg" 2>/dev/null | diff - "/tmp/$passfile_temp" &>/dev/null && error "Password unchanged."
+            gpg_key=$(cat $passDir/.gpg_key)
+            while ! gpg --yes ${GPG_OPTS} --output ${passDir}/${passfile}.gpg --encrypt --recipient ${gpg_key} /tmp/${passfile_temp}; do
+                yesno "GPG encryption failed. Would you like to try again?"
+            done
+            rm -f /tmp/${passfile_temp}
+            msg "${VISUAL:-vim}: Password '${password%%$'\n'*}' has been saved to ${passDir}/${passfile}.gpg"
         else
             error "valid GPG does not exist!"
-            return 1
         fi
     else
         if [[ -f $passDir/.gpg_key ]]; then
             error "That password file does not exists."
-            return 1
         else
             error "valid GPG does not exist!"
-            return 1
         fi
     fi
+    exit
+}
+
+#=== FUNCTION =================================================================
+#        Name: generate
+# Description: Generate a password to the password manager.
+# Parameter 1: the file name without .gpg.
+# Parameter 2: password leanth.
+#==============================================================================
+
+generate() {
+    if [[ $# -lt 3 ]]; then
+        error "Not enough parameters supplied"
+    elif [[ $# -gt 3 ]]; then
+        error "Too many parameters supplied."
+    else
+        shift
+    fi
+
+    local passfile=$1
+    local length=$2
+    [[ $length =~ ^[0-9]+$ ]] || error "password length \"$length\" must be a number."
+	[[ $length -gt 0 ]] || error "password length must be greater than zero."
+    local passfile_temp="${passfile}.tmp.${RANDOM}.${RANDOM}.${RANDOM}.${RANDOM}.--"
+
+    if [[ -f "${passDir}/${passfile}.gpg" ]]; then
+        if [[ -f $passDir/.gpg_key ]]; then
+            error "That password file already exists."
+        else
+            error "valid GPG does not exist!"
+        fi
+    else
+        if [[ -f $passDir/.gpg_key ]]; then
+            gpg_key=$(cat $passDir/.gpg_key)
+            read -r -n $length password < <(LC_ALL=C tr -dc "[:punct:][:alnum:]" < /dev/urandom)
+            [[ ${#password} -eq $length ]] || error "Could not generate password from /dev/urandom."
+
+            echo -e "${password}" > /tmp/${passfile_temp}
+            gpg ${GPG_OPTS} --output ${passDir}/${passfile}.gpg --encrypt --recipient ${gpg_key} /tmp/${passfile_temp}
+            rm -f /tmp/${passfile_temp}
+            msg "Password '${password}' has been saved to ${passDir}/${passfile}.gpg"
+        else
+            error "valid GPG does not exist!"
+        fi
+    fi
+    exit
 }
 
 #=== FUNCTION =================================================================
@@ -201,15 +379,21 @@ usage() {
       %s [options] [<password>]...
 
     Options:
-      -h, --help                    Display help.
-      -w, --write                   Wite a password to the database.
-      -g, --generate                Generate a password.
-      -p, --print                   Print saved password data to the terminal.
-      -l, --list                    List the saved password in a tree format.
-      -b, --backup                  Backup passwords to a tar file.
-      -r, --restore                 Restore password from a tar file.
-      -v, --version                 Print version information and exits.
-      \n" "$COLORDESCRIPTION" "$VERSION" "$SCRIPTNAME" "$SCRIPTNAME"
+        -h, --help                  Display help.
+        -w, --write                 Wite a password to the database.
+        -g, --generate              Generate a password.
+        -e, --edit                  Edit a password.
+        -d, --delete                Delete a password.
+        -p, --print                 Print saved password data to the terminal.
+        -l, --list                  List the saved password in a tree format.
+        -b, --backup                Backup passwords to a tar file.
+        -r, --restore               Restore password from a tar file.
+        -v, --version               Print version information and exits.
+
+    --print Options:
+        -c, --copy                  Copy a printed password using xclip.
+    \n" "$COLORDESCRIPTION" "$VERSION" "$SCRIPTNAME" "$SCRIPTNAME"
+      exit
 }
 
 #=== FUNCTION =================================================================
@@ -236,36 +420,42 @@ version() {
     exit
 }
 
-while true; do
+if [[ -z $@ ]]; then
+    usage
+fi
+
+while [ "$1" ]; do
     case $1 in
         -i|--init)
             initialize $@
-            exit 0
-            ;;
+            shift;;
         -w|--write)
             write $@
-            exit 0
-            ;;
+            shift;;
         -p|--print)
             print $@
-            exit 0
-            ;;
+            shift;;
+        -e|--edit)
+            edit $@
+            shift;;
+        -l|--list)
+            list $@
+            shift;;
+        -g|--generate)
+            generate $@
+            shift;;
         -h|--help|-\?)
             usage
-            exit 0
-            ;;
+            shift;;
         -v|--version)
             version
-            exit 0
-            ;;
+            shift;;
         -*)
             error "Unknown option: $1"
             usage
-            exit 1
             ;;
         *)
             usage
-            exit 0
             ;;
     esac
 done
