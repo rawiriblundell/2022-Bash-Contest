@@ -9,6 +9,7 @@
    * Bash shell script to manage passwords with GnuPG asymmetric encryption.
    * Designed and recommended to be used with Yubikey as the secret key storage. (Optional)
    * Have git support for backup and to sync between different machines. (Optional)
+   * Set an Environment variable to be able to move the location of the passwords (Optional but recommended)
 
 ## Must Include Listed Flags (example -h)
 
