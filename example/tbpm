@@ -1,0 +1,271 @@
+#!/usr/bin/env bash
+
+#------------------------------------------------------------------------------
+# Path         - /usr/bin/tbpm
+# GitHub       - https://github.com/The-Repo-Club/
+# Author       - The-Repo-Club [wayne6324@gmail.com]
+# Start On     - Sun 12 Dec 13:39:12 GMT 2021
+# Modified On  - Sun 12 Dec 13:39:12 GMT 2021
+#------------------------------------------------------------------------------
+
+# More about colors at Arch Wiki
+# https://wiki.archlinux.org/index.php/Color_Bash_Prompt
+#
+# Don't use double quotes here!
+# Text attributes
+declare -r txtClean=$'\e[0m'      # All attributes off
+declare -r txtBold=$'\e[1m'       # Or bright, depend on your terminal
+declare -r txtUScore=$'\e[4m'     # Underscore
+declare -r txtHide=$'\e[8m'       # Concealed, very useful here...
+
+# Foreground colors only. Someone may miss backgroud colors.
+declare -r colBlack=$'\e[30m'
+declare -r colRed=$'\e[31m'
+declare -r colGreen=$'\e[32m'
+declare -r colYello=$'\e[33m'
+declare -r colBlue=$'\e[34m'
+declare -r colMagenta=$'\e[35m'
+declare -r colArchBlue=$'\e[36m'  # Well, someone may call it Cyan
+declare -r colWhite=$'\e[37m'
+
+## Script metadata
+SCRIPTNAME=${0##*/}
+VERSION="2021.12.12"
+DESCRIPTION="Terminal Based Password Manager"
+AUTHOR="The-Repo-Club <wayne6324@gmail.com>"
+COLORDESCRIPTION="${colBlue}T${txtClean}erminal ${colBlue}B${txtClean}ased ${colBlue}P${txtClean}assword ${colBlue}M${txtClean}anager"
+GPG_OPTS="--quiet --batch --use-agent"
+
+readonly SCRIPTNAME DESCRIPTION COLORDESCRIPTION VERSION AUTHOR
+
+if [[ -z "$TBPM" ]]; then
+    passDir=$HOME/.tbpm
+else
+    passDir=$TBPM
+fi
+
+#=== FUNCTION =================================================================
+#        Name: msg
+# Description: Print message with a green pretag if $quiet is not set.
+# Parameter 1: Message to print.
+#==============================================================================
+
+# copied from makepkg and modified
+msg () {
+
+    local mesg=$1; shift
+    printf "${colGreen}==>${txtClean}${txtBold} %s${txtClean}\n" "$mesg" "$@"
+}
+
+#=== FUNCTION =================================================================
+#        Name: error
+# Description: Print message with a red pretag an ERROR.
+# Parameter 1: Message to print.
+#==============================================================================
+
+# copied from makepkg
+error() {
+
+    local mesg=$1; shift
+    printf "${colRed}==> ERROR:${txtClean}${txtBold} %s${txtClean}\n" "$mesg" "$@" >&2
+
+}
+
+#=== FUNCTION =================================================================
+#        Name: initialize
+# Description: Initialize the password manager.
+# Parameter 1: GPG key.
+#==============================================================================
+
+initialize() {
+    local gpg_key=
+
+    if [[ ! -d $passDir ]]; then
+        mkdir -p $passDir
+    fi
+
+    if [[ $# -lt 2 ]]; then
+        error "Not enough parameters supplied"
+        return 1
+    else
+        shift
+    fi
+
+    local key=$1
+    while read -r gpg_id; do
+        if [[ "$gpg_id" == "$key" ]]; then
+            gpg_key=$gpg_id
+        fi
+    done <<< $( gpg --list-keys )
+
+    if [ -z $gpg_key ]; then
+        error "valid GPG does not exist!"
+        return 1
+    else
+        echo $gpg_key > $passDir/.gpg_key
+        msg "GPG '${gpg_key}' has been saved to ${passDir}/.gpg_key"
+        return 1
+    fi
+}
+
+#=== FUNCTION =================================================================
+#        Name: write
+# Description: Write a password to the password manager.
+# Parameter 1: the file name without .gpg.
+# Parameter 1: the password for ther file.
+#==============================================================================
+
+write() {
+    if [[ $# -lt 3 ]]; then
+        error "Not enough parameters supplied"
+        return 1
+    else
+        shift
+    fi
+
+    local passfile=$1
+    local password=$2
+    local passfile_temp="${passfile}.tmp.${RANDOM}.${RANDOM}.${RANDOM}.${RANDOM}.--"
+
+    if [[ -f "${passDir}/${passfile}.gpg" ]]; then
+        if [[ -f $passDir/.gpg_key ]]; then
+            error "That password file already exists."
+            return 1
+        else
+            error "valid GPG does not exist!"
+            return 1
+        fi
+    else
+        if [[ -f $passDir/.gpg_key ]]; then
+            gpg_key=$(cat $passDir/.gpg_key)
+            echo -e "${password}" > /tmp/${passfile_temp}
+            gpg ${GPG_OPTS} --output ${passDir}/${passfile}.gpg --encrypt --recipient ${gpg_key} /tmp/${passfile_temp}
+            rm -f /tmp/${passfile_temp}
+            return 1
+        else
+            error "valid GPG does not exist!"
+            return 1
+        fi
+    fi
+}
+
+#=== FUNCTION =================================================================
+#        Name: print
+# Description: Print a password from the password manager.
+# Parameter 1: the file name without .gpg.
+#==============================================================================
+
+print() {
+    if [[ $# -lt 2 ]]; then
+        error "Not enough parameters supplied"
+        return 1
+    else
+        shift
+    fi
+
+    local passfile=$1
+    local passfile_temp="${passfile}.tmp.${RANDOM}.${RANDOM}.${RANDOM}.${RANDOM}.--"
+
+    if [[ -f "${passDir}/${passfile}.gpg" ]]; then
+        if [[ -f $passDir/.gpg_key ]]; then
+            gpg ${GPG_OPTS} --output /tmp/${passfile_temp} --decrypt ${passDir}/${passfile}.gpg
+            password=$(cat /tmp/${passfile_temp})
+            printf "%s: %s\n" "${passfile}" "${password}"
+            return 1
+        else
+            error "valid GPG does not exist!"
+            return 1
+        fi
+    else
+        if [[ -f $passDir/.gpg_key ]]; then
+            error "That password file does not exists."
+            return 1
+        else
+            error "valid GPG does not exist!"
+            return 1
+        fi
+    fi
+}
+
+#=== FUNCTION =================================================================
+#        Name: usage
+# Description: Prints the usage.
+#==============================================================================
+
+usage() {
+    printf "
+    %s - v%s
+
+    Usage:
+      %s <password>...
+      %s [options] [<password>]...
+
+    Options:
+      -h, --help                    Display help.
+      -w, --write                   Wite a password to the database.
+      -g, --generate                Generate a password.
+      -p, --print                   Print saved password data to the terminal.
+      -l, --list                    List the saved password in a tree format.
+      -b, --backup                  Backup passwords to a tar file.
+      -r, --restore                 Restore password from a tar file.
+      -v, --version                 Print version information and exits.
+      \n" "$COLORDESCRIPTION" "$VERSION" "$SCRIPTNAME" "$SCRIPTNAME"
+}
+
+#=== FUNCTION =================================================================
+#        Name: version
+# Description: Prints version information.
+#==============================================================================
+
+version() {
+    printf "
+     _________   ______    ______    ____    ____
+    |  _   _  | |_   _ \  |_   __ \ |_   \  /   _|
+    |_/ | | \_|   | |_) |   | |__) |  |   \/   |
+        | |       |  __'.   |  ___/   | |\  /| |
+       _| |_     _| |__) | _| |_     _| |_\/_| |_
+      |_____|   |_______/ |_____|   |_____||_____|
+
+    %s - v%s
+
+    This program may be freely redistributed under
+    the terms of the GNU General Public License v3.0.
+
+    %s
+    \n" "$COLORDESCRIPTION" "$VERSION" "$AUTHOR"
+    exit
+}
+
+while true; do
+    case $1 in
+        -i|--init)
+            initialize $@
+            exit 0
+            ;;
+        -w|--write)
+            write $@
+            exit 0
+            ;;
+        -p|--print)
+            print $@
+            exit 0
+            ;;
+        -h|--help|-\?)
+            usage
+            exit 0
+            ;;
+        -v|--version)
+            version
+            exit 0
+            ;;
+        -*)
+            error "Unknown option: $1"
+            usage
+            exit 1
+            ;;
+        *)
+            usage
+            exit 0
+            ;;
+    esac
+done
