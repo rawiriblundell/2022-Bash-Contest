@@ -28,7 +28,7 @@
 ## How to join the contest.
   * Fork this repo
   * Push to a branch with the name being your username to your own fork
-  * Request a pull request into this repo when compleated
+  * Request a pull request into this repo when completed
 
 
 ## DO NOT Copy.
