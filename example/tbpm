@@ -175,7 +175,7 @@ print() {
     case $3 in
 		-c|--copy)
             shift
-            copy $@
+            copy "${@}"
             ;;
 	esac
 
@@ -420,29 +420,27 @@ version() {
     exit
 }
 
-if [[ -z $@ ]]; then
-    usage
-fi
+(( "${#}" == 0 )) && usage
 
 while [ "$1" ]; do
     case $1 in
         -i|--init)
-            initialize $@
+            initialize "${@}"
             shift;;
         -w|--write)
-            write $@
+            write "${@}"
             shift;;
         -p|--print)
-            print $@
+            print "${@}"
             shift;;
         -e|--edit)
-            edit $@
+            edit "${@}"
             shift;;
         -l|--list)
-            list $@
+            list "${@}"
             shift;;
         -g|--generate)
-            generate $@
+            generate "${@}"
             shift;;
         -h|--help|-\?)
             usage
