@@ -38,6 +38,11 @@ GPG_OPTS="--quiet --batch --use-agent"
 
 readonly SCRIPTNAME DESCRIPTION COLORDESCRIPTION VERSION AUTHOR
 
+# Get the top level PID and setup a trap so that we can call die() within subshells
+trap "exit 1" TERM
+_self_pid="${$}"
+export _self_pid
+
 if [[ -z "$TBPM" ]]; then
     passDir=$HOME/.tbpm
 else
@@ -49,40 +54,43 @@ fi
 # Description: Print message with a green pretag if $quiet is not set.
 # Parameter 1: Message to print.
 #==============================================================================
-
-# copied from makepkg and modified
-msg () {
-
-    local mesg=$1; shift
-    printf "${colGreen}==>${txtClean}${txtBold} %s${txtClean}\n" "$mesg" "$@"
+# Provenance: makepkg
+msg() {
+    if [ -t 0 ]; then
+        printf "${colGreen}==>${txtClean}${txtBold} %s${txtClean}\n" "${*}"
+    else
+        printf "==> %s\n" "${*}"
+    fi
     exit 0
 }
 
 #=== FUNCTION =================================================================
-#        Name: error
-# Description: Print message with a red pretag an ERROR.
+#        Name: die
+# Description: Print an error message and exit.
 # Parameter 1: Message to print.
 #==============================================================================
-
-# copied from makepkg
-error() {
-
-    local mesg=$1; shift
-    printf "${colRed}==> ERROR:${txtClean}${txtBold} %s${txtClean}\n" "$mesg" "$@" >&2
-    exit 1
-
+# Provenance: https://gist.github.com/rawiriblundell/2dab6903848f73641652a8e95e872dcb
+die() {
+    if [ -t 0 ]; then
+        printf "${colRed}==> ERROR:${txtClean}${txtBold} %s${txtClean}\n" "${*}" >&2
+    else
+        printf "==> ERROR: %s\n" "${*}" >&2
+    fi
+  # Send a TERM signal to the top level PID, this is trapped and exit 1 is forced
+  kill -s TERM "${_self_pid}"
 }
 
 #=== FUNCTION =================================================================
 #        Name: confirm
 # Description: Prompt and read an interactive yes/no response
-#     Stops reading after one character, meaning only 'y' or 'Y' will return 0
-#     Any other character, or an optional timeout (-t|--timeout) will return 1
+#        Stops reading after one character, meaning only 'y' or 'Y' will return 0
+#        Any other character, or an optional timeout (-t|--timeout) will return 1
 # Options:
-#    [-t|--timeout] (number of seconds).
-#    When used, function returns 1 when the timeout is reached.
+#        [-t|--timeout] (number of seconds).
+#        When used, function returns 1 when the timeout is reached.
 # Parameter 1: Message to print.
 #==============================================================================
+# Provenance: https://gist.github.com/rawiriblundell/7e8a26d8076ce09b6daa315389f822cd
 confirm() {
     [[ -t 0 ]] || return 0
     local confirm_args
@@ -117,9 +125,9 @@ initialize() {
     fi
 
     if [[ $# -lt 2 ]]; then
-        error "Not enough parameters supplied"
+        die "Not enough parameters supplied"
     elif [[ $# -gt 2 ]]; then
-        error "Too many parameters supplied."
+        die "Too many parameters supplied."
     else
         shift
     fi
@@ -132,7 +140,7 @@ initialize() {
     done <<< $( gpg --list-keys )
 
     if [ -z $gpg_key ]; then
-        error "valid GPG does not exist!"
+        die "valid GPG does not exist!"
     else
         echo $gpg_key > $passDir/.gpg_key
         msg "GPG '${gpg_key}' has been saved to ${passDir}/.gpg_key"
@@ -149,9 +157,9 @@ initialize() {
 
 write() {
     if [[ $# -lt 3 ]]; then
-        error "Not enough parameters supplied"
+        die "Not enough parameters supplied"
     elif [[ $# -gt 3 ]]; then
-        error "Too many parameters supplied."
+        die "Too many parameters supplied."
     else
         shift
     fi
@@ -162,9 +170,9 @@ write() {
 
     if [[ -f "${passDir}/${passfile}.gpg" ]]; then
         if [[ -f $passDir/.gpg_key ]]; then
-            error "That password file already exists."
+            die "That password file already exists."
         else
-            error "valid GPG does not exist!"
+            die "valid GPG does not exist!"
         fi
     else
         if [[ -f $passDir/.gpg_key ]]; then
@@ -174,7 +182,7 @@ write() {
             rm -f /tmp/${passfile_temp}
             msg "Password '${password}' has been saved to ${passDir}/${passfile}.gpg"
         else
-            error "valid GPG does not exist!"
+            die "valid GPG does not exist!"
         fi
     fi
     exit
@@ -195,9 +203,9 @@ print() {
 	esac
 
     if [[ $# -lt 2 ]]; then
-        error "Not enough parameters supplied."
+        die "Not enough parameters supplied."
     elif [[ $# -gt 2 ]]; then
-        error "Too many parameters supplied."
+        die "Too many parameters supplied."
     else
         shift
     fi
@@ -211,13 +219,13 @@ print() {
             password=$(cat /tmp/${passfile_temp})
             printf "%s: %s\n" "${passfile}" "${password}"
         else
-            error "valid GPG does not exist!"
+            die "valid GPG does not exist!"
         fi
     else
         if [[ -f $passDir/.gpg_key ]]; then
-            error "That password file does not exists."
+            die "That password file does not exists."
         else
-            error "valid GPG does not exist!"
+            die "valid GPG does not exist!"
         fi
     fi
     exit
@@ -231,9 +239,9 @@ print() {
 
 copy() {
     if [[ $# -lt 2 ]]; then
-        error "Not enough parameters supplied."
+        die "Not enough parameters supplied."
     elif [[ $# -gt 2 ]]; then
-        error "Too many parameters supplied."
+        die "Too many parameters supplied."
     fi
 
     local passfile=${1%%-*}
@@ -253,13 +261,13 @@ copy() {
                 printf "%s\n" "${password%%$'\n'*}" | xclip -selection clipboard
             fi
         else
-            error "valid GPG does not exist!"
+            die "valid GPG does not exist!"
         fi
     else
         if [[ -f $passDir/.gpg_key ]]; then
-            error "That password file does not exists."
+            die "That password file does not exists."
         else
-            error "valid GPG does not exist!"
+            die "valid GPG does not exist!"
         fi
     fi
     exit
@@ -272,9 +280,9 @@ copy() {
 
 list() {
     if [[ $# -lt 1 ]]; then
-        error "Not enough parameters supplied."
+        die "Not enough parameters supplied."
     elif [[ $# -gt 1 ]]; then
-        error "Too many parameters supplied."
+        die "Too many parameters supplied."
     else
         shift
     fi
@@ -287,7 +295,7 @@ list() {
             fi
         done <<< $( tree -N -l --noreport --prune --matchdirs --ignore-case "$passDir" )
     else
-        error "valid GPG does not exist!"
+        die "valid GPG does not exist!"
     fi
     exit
 }
@@ -299,9 +307,9 @@ list() {
 
 edit() {
     if [[ $# -lt 2 ]]; then
-        error "Not enough parameters supplied."
+        die "Not enough parameters supplied."
     elif [[ $# -gt 2 ]]; then
-        error "Too many parameters supplied."
+        die "Too many parameters supplied."
     else
         shift
     fi
@@ -314,8 +322,8 @@ edit() {
             gpg ${GPG_OPTS} --output /tmp/${passfile_temp} --decrypt ${passDir}/${passfile}.gpg
             ${VISUAL:-vim} "/tmp/$passfile_temp"
             password=$(cat /tmp/${passfile_temp})
-	        [[ -f "/tmp/$passfile_temp" ]] || error "New password not saved."
-            gpg -d -o - ${GPG_OPTS} "${passDir}/${passfile}.gpg" 2>/dev/null | diff - "/tmp/$passfile_temp" &>/dev/null && error "Password unchanged."
+	        [[ -f "/tmp/$passfile_temp" ]] || die "New password not saved."
+            gpg -d -o - ${GPG_OPTS} "${passDir}/${passfile}.gpg" 2>/dev/null | diff - "/tmp/$passfile_temp" &>/dev/null && die "Password unchanged."
             gpg_key=$(cat $passDir/.gpg_key)
             while ! gpg --yes ${GPG_OPTS} --output ${passDir}/${passfile}.gpg --encrypt --recipient ${gpg_key} /tmp/${passfile_temp}; do
                 confirm "GPG encryption failed. Would you like to try again"
@@ -323,13 +331,13 @@ edit() {
             rm -f /tmp/${passfile_temp}
             msg "${VISUAL:-vim}: Password '${password%%$'\n'*}' has been saved to ${passDir}/${passfile}.gpg"
         else
-            error "valid GPG does not exist!"
+            die "valid GPG does not exist!"
         fi
     else
         if [[ -f $passDir/.gpg_key ]]; then
-            error "That password file does not exists."
+            die "That password file does not exists."
         else
-            error "valid GPG does not exist!"
+            die "valid GPG does not exist!"
         fi
     fi
     exit
@@ -344,37 +352,37 @@ edit() {
 
 generate() {
     if [[ $# -lt 3 ]]; then
-        error "Not enough parameters supplied"
+        die "Not enough parameters supplied"
     elif [[ $# -gt 3 ]]; then
-        error "Too many parameters supplied."
+        die "Too many parameters supplied."
     else
         shift
     fi
 
     local passfile=$1
     local length=$2
-    [[ $length =~ ^[0-9]+$ ]] || error "password length \"$length\" must be a number."
-	[[ $length -gt 0 ]] || error "password length must be greater than zero."
+    [[ $length =~ ^[0-9]+$ ]] || die "password length \"$length\" must be a number."
+	[[ $length -gt 0 ]] || die "password length must be greater than zero."
     local passfile_temp="${passfile}.tmp.${RANDOM}.${RANDOM}.${RANDOM}.${RANDOM}.--"
 
     if [[ -f "${passDir}/${passfile}.gpg" ]]; then
         if [[ -f $passDir/.gpg_key ]]; then
-            error "That password file already exists."
+            die "That password file already exists."
         else
-            error "valid GPG does not exist!"
+            die "valid GPG does not exist!"
         fi
     else
         if [[ -f $passDir/.gpg_key ]]; then
             gpg_key=$(cat $passDir/.gpg_key)
             read -r -n $length password < <(LC_ALL=C tr -dc "[:punct:][:alnum:]" < /dev/urandom)
-            [[ ${#password} -eq $length ]] || error "Could not generate password from /dev/urandom."
+            [[ ${#password} -eq $length ]] || die "Could not generate password from /dev/urandom."
 
             echo -e "${password}" > /tmp/${passfile_temp}
             gpg ${GPG_OPTS} --output ${passDir}/${passfile}.gpg --encrypt --recipient ${gpg_key} /tmp/${passfile_temp}
             rm -f /tmp/${passfile_temp}
             msg "Password '${password}' has been saved to ${passDir}/${passfile}.gpg"
         else
-            error "valid GPG does not exist!"
+            die "valid GPG does not exist!"
         fi
     fi
     exit
@@ -450,7 +458,7 @@ while [ "${1}" ]; do
         (-h|--help|-\?) usage; shift 1 ;;
         (-v|--version)  version; shift 1 ;;
         (-*)
-            error "Unknown option: ${1}"
+            die "Unknown option: ${1}"
             usage
         ;;
         (*)             usage ;;
