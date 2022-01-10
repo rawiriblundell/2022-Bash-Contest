@@ -95,8 +95,8 @@ confirm() {
     local confirm_args
     case "${1}" in
         (-t|--timeout)
-        confirm_args=( -t "${2}" -rn 1 -p )
-        set -- "${@:3}"
+            confirm_args=( -t "${2}" -rn 1 -p )
+            set -- "${@:3}"
         ;;
         (*)  confirm_args=( -rn 1 -p ) ;;
     esac
