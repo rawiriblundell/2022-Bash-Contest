@@ -422,38 +422,20 @@ version() {
 
 (( "${#}" == 0 )) && usage
 
-while [ "$1" ]; do
-    case $1 in
-        -i|--init)
-            initialize "${@}"
-            shift;;
-        -w|--write)
-            write "${@}"
-            shift;;
-        -p|--print)
-            print "${@}"
-            shift;;
-        -e|--edit)
-            edit "${@}"
-            shift;;
-        -l|--list)
-            list "${@}"
-            shift;;
-        -g|--generate)
-            generate "${@}"
-            shift;;
-        -h|--help|-\?)
+while [ "${1}" ]; do
+    case "${1}" in
+        (-i|--init)     initialize "${@}"; shift ;;
+        (-w|--write)    write "${@}"; shift ;;
+        (-p|--print)    print "${@}"; shift 1 ;;
+        (-e|--edit)     edit "${@}"; shift 1 ;;
+        (-l|--list)     list "${@}"; shift 1 ;;
+        (-g|--generate) generate "${@}"; shift 1 ;;
+        (-h|--help|-\?) usage; shift 1 ;;
+        (-v|--version)  version; shift 1 ;;
+        (-*)
+            error "Unknown option: ${1}"
             usage
-            shift;;
-        -v|--version)
-            version
-            shift;;
-        -*)
-            error "Unknown option: $1"
-            usage
-            ;;
-        *)
-            usage
-            ;;
+        ;;
+        (*)             usage ;;
     esac
 done
