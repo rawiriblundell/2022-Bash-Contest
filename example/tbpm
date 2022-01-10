@@ -111,17 +111,46 @@ confirm() {
 }
 
 #=== FUNCTION =================================================================
+#        Name: is_integer
+# Description: Test whether a given var is an integer
+#        Optional +/- specifiers are supported
+# Parameter 1: Var to validate
+#==============================================================================
+is_integer() {
+    case "${1#[-+]}" in 
+        (''|*[!0-9]*) return 1 ;;
+    esac
+    return 0
+}
+
+#=== FUNCTION =================================================================
+#        Name: validate_param_count
+# Description: Test whether the number of given parameters is correct
+# Parameter 1: Desired number of parameters
+# Parameter 2: Actual number of parameters (usually "${#}")
+#==============================================================================
+validate_param_count() {
+    local desired_count actual_count
+    # Prevent irony
+    (( "${#}" != 2 )) && die "Incorrect number of parameters to check"
+    # Validate that our vars are actually integers
+    is_integer "${desired_count}" || die "${desired_count} is not an integer"
+    is_integer "${actual_count}" || die "${actual_count} is not an integer"
+    # Finally, run the actual testing
+    (( actual_count < desired_count )) && die "Not enough parameters supplied"
+    (( actual_count > desired_count )) && die "Too many parameters supplied."
+}
+
+#=== FUNCTION =================================================================
 #        Name: initialize
 # Description: Initialize the password manager.
 # Parameter 1: GPG key.
 #==============================================================================
-
 initialize() {
     local gpg_key=
 
     mkdir -p "${pass_dir}" || die "Failed to create ${pass_dir}"
-    (( "${#}" < 2 )) && die "Not enough parameters supplied"
-    (( "${#}" > 2 )) && die "Too many parameters supplied."
+    validate_param_count 2 "${#}"
     shift
 
     local key=$1
@@ -147,8 +176,7 @@ initialize() {
 #==============================================================================
 
 write() {
-    (( "${#}" < 3 )) && die "Not enough parameters supplied"
-    (( "${#}" > 3 )) && die "Too many parameters supplied."
+    validate_param_count 3 "${#}"
     shift
 
     local passfile=$1
@@ -186,8 +214,7 @@ print() {
         (-c|--copy) shift; copy "${@}" ;;
     esac
 
-    (( "${#}" < 2 )) && die "Not enough parameters supplied"
-    (( "${#}" > 2 )) && die "Too many parameters supplied."
+    validate_param_count 2 "${#}"
     shift
 
     local passfile=${1%%-*}
@@ -218,8 +245,7 @@ print() {
 #==============================================================================
 
 copy() {
-    (( "${#}" < 2 )) && die "Not enough parameters supplied"
-    (( "${#}" > 2 )) && die "Too many parameters supplied."
+    validate_param_count 2 "${#}"
 
     local passfile=${1%%-*}
     local passfile_temp="${passfile}.tmp.${RANDOM}.${RANDOM}.${RANDOM}.${RANDOM}.--"
@@ -256,8 +282,7 @@ copy() {
 #==============================================================================
 
 list() {
-    (( "${#}" < 1 )) && die "Not enough parameters supplied"
-    (( "${#}" > 1 )) && die "Too many parameters supplied."
+    validate_param_count 1 "${#}"
     shift
 
     if [[ -f "${pass_dir}"/.gpg_key ]]; then
@@ -279,8 +304,7 @@ list() {
 #==============================================================================
 
 edit() {
-    (( "${#}" < 2 )) && die "Not enough parameters supplied"
-    (( "${#}" > 2 )) && die "Too many parameters supplied."
+    validate_param_count 2 "${#}"
     shift
 
     local passfile=$1
@@ -321,8 +345,7 @@ edit() {
 #==============================================================================
 
 generate() {
-    (( "${#}" < 3 )) && die "Not enough parameters supplied"
-    (( "${#}" > 3 )) && die "Too many parameters supplied."
+    validate_param_count 3 "${#}"
     shift
 
     local passfile=$1
