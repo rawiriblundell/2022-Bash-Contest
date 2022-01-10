@@ -155,7 +155,7 @@ initialize() {
 
     local key=$1
     while read -r gpg_id; do
-        if [[ "$gpg_id" == "$key" ]]; then
+        if [[ "$gpg_id" = "$key" ]]; then
             gpg_key=$gpg_id
         fi
     done < <( gpg --list-keys )
@@ -256,7 +256,7 @@ copy() {
             password=$(<"/tmp/${passfile_temp}")
             if command -v clipmenu-ctl &> /dev/null; then
                 clipmenu-ctl disable
-                if [ "$(clipmenu-ctl status)" == "disabled" ]; then
+                if [ "$(clipmenu-ctl status)" = "disabled" ]; then
                     printf "%s\n" "${password%%$'\n'*}" | xclip -selection clipboard
                 fi
                 clipmenu-ctl enable
@@ -288,7 +288,7 @@ list() {
     if [[ -f "${pass_dir}"/.gpg_key ]]; then
         printf "%s\n" "${tbpm_description_color}"
         while read -r; do
-            if [[ ! "$REPLY" == "${pass_dir}" ]]; then
+            if [[ ! "$REPLY" = "${pass_dir}" ]]; then
                 echo "${REPLY::-4}"
             fi
         done < <( tree -N -l --noreport --prune --matchdirs --ignore-case "${pass_dir}" )
