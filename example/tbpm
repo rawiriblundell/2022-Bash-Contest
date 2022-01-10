@@ -74,18 +74,33 @@ error() {
 }
 
 #=== FUNCTION =================================================================
-#        Name: yesno
-# Description: Print message with a yes or no responce.
+#        Name: confirm
+# Description: Prompt and read an interactive yes/no response
+#     Stops reading after one character, meaning only 'y' or 'Y' will return 0
+#     Any other character, or an optional timeout (-t|--timeout) will return 1
+# Options:
+#    [-t|--timeout] (number of seconds).
+#    When used, function returns 1 when the timeout is reached.
 # Parameter 1: Message to print.
 #==============================================================================
-
-yesno() {
-
-	[[ -t 0 ]] || return 0
-	local response
-	read -r -p "$1 [y/N] " response
-	[[ $response == [yY] ]] || exit 1
-
+confirm() {
+    [[ -t 0 ]] || return 0
+    local confirm_args
+    case "${1}" in
+        (-t|--timeout)
+        confirm_args=( -t "${2}" -rn 1 -p )
+        set -- "${@:3}"
+        ;;
+        (*)  confirm_args=( -rn 1 -p ) ;;
+    esac
+    
+    # shellcheck disable=SC2162 # '-r' is provided by confirm_args[@]
+    read "${confirm_args[@]}" "${*:-Continue} [y/N]? "
+    printf -- '%s\n' ""
+    case "${REPLY}" in
+        ([yY]) return 0 ;;
+        (*)    return 1 ;;
+    esac
 }
 
 #=== FUNCTION =================================================================
@@ -303,7 +318,7 @@ edit() {
             gpg -d -o - ${GPG_OPTS} "${passDir}/${passfile}.gpg" 2>/dev/null | diff - "/tmp/$passfile_temp" &>/dev/null && error "Password unchanged."
             gpg_key=$(cat $passDir/.gpg_key)
             while ! gpg --yes ${GPG_OPTS} --output ${passDir}/${passfile}.gpg --encrypt --recipient ${gpg_key} /tmp/${passfile_temp}; do
-                yesno "GPG encryption failed. Would you like to try again?"
+                confirm "GPG encryption failed. Would you like to try again"
             done
             rm -f /tmp/${passfile_temp}
             msg "${VISUAL:-vim}: Password '${password%%$'\n'*}' has been saved to ${passDir}/${passfile}.gpg"
