@@ -56,7 +56,7 @@ fi
 #==============================================================================
 # Provenance: makepkg
 msg() {
-    if [ -t 0 ]; then
+    if [[ -t 0 ]]; then
         printf "${colGreen}==>${txtClean}${txtBold} %s${txtClean}\n" "${*}"
     else
         printf "==> %s\n" "${*}"
@@ -70,7 +70,7 @@ msg() {
 #==============================================================================
 # Provenance: https://gist.github.com/rawiriblundell/2dab6903848f73641652a8e95e872dcb
 die() {
-    if [ -t 0 ]; then
+    if [[ -t 0 ]]; then
         printf "${colRed}==> ERROR:${txtClean}${txtBold} %s${txtClean}\n" "${*}" >&2
     else
         printf "==> ERROR: %s\n" "${*}" >&2
@@ -158,9 +158,9 @@ initialize() {
         if [[ "$gpg_id" = "$key" ]]; then
             gpg_key=$gpg_id
         fi
-    done < <( gpg --list-keys )
+    done < <(gpg --list-keys)
 
-    [ -z "${gpg_key}" ] && die "valid GPG does not exist!"
+    [[ -z "${gpg_key}" ]] && die "valid GPG does not exist!"
 
     echo "${gpg_key}" > "${pass_dir}"/.gpg_key
     msg "GPG '${gpg_key}' has been saved to ${pass_dir}/.gpg_key"
@@ -174,7 +174,6 @@ initialize() {
 # Parameter 1: the file name without .gpg.
 # Parameter 2: the password for ther file.
 #==============================================================================
-
 write() {
     validate_param_count 3 "${#}"
     shift
@@ -208,7 +207,6 @@ write() {
 # Description: Print a password from the password manager.
 # Parameter 1: the file name without .gpg.
 #==============================================================================
-
 print() {
     case $3 in
         (-c|--copy) shift; copy "${@}" ;;
@@ -243,7 +241,6 @@ print() {
 # Description: Copy a command from the print options.
 # Parameter 1: the file name without .gpg.
 #==============================================================================
-
 copy() {
     validate_param_count 2 "${#}"
 
@@ -256,7 +253,7 @@ copy() {
             password=$(<"/tmp/${passfile_temp}")
             if command -v clipmenu-ctl &> /dev/null; then
                 clipmenu-ctl disable
-                if [ "$(clipmenu-ctl status)" = "disabled" ]; then
+                if [[ "$(clipmenu-ctl status)" = "disabled" ]]; then
                     printf "%s\n" "${password%%$'\n'*}" | xclip -selection clipboard
                 fi
                 clipmenu-ctl enable
@@ -280,7 +277,6 @@ copy() {
 #        Name: list
 # Description: List the passwords from the password manager.
 #==============================================================================
-
 list() {
     validate_param_count 1 "${#}"
     shift
@@ -291,7 +287,7 @@ list() {
             if [[ ! "$REPLY" = "${pass_dir}" ]]; then
                 echo "${REPLY::-4}"
             fi
-        done < <( tree -N -l --noreport --prune --matchdirs --ignore-case "${pass_dir}" )
+        done < <(tree -N -l --noreport --prune --matchdirs --ignore-case "${pass_dir}")
     else
         die "valid GPG does not exist!"
     fi
@@ -302,7 +298,6 @@ list() {
 #        Name: edit
 # Description: Edit a password from the password manager.
 #==============================================================================
-
 edit() {
     validate_param_count 2 "${#}"
     shift
@@ -343,15 +338,14 @@ edit() {
 # Parameter 1: the file name without .gpg.
 # Parameter 2: password leanth.
 #==============================================================================
-
 generate() {
     validate_param_count 3 "${#}"
     shift
 
     local passfile=$1
     local length=$2
-    [[ $length =~ ^[0-9]+$ ]] || die "password length \"$length\" must be a number."
-	[[ $length -gt 0 ]] || die "password length must be greater than zero."
+    is_integer "${length}" || die "password length \"$length\" must be a number."
+	(( length > 0 )) || die "password length must be greater than zero."
     local passfile_temp="${passfile}.tmp.${RANDOM}.${RANDOM}.${RANDOM}.${RANDOM}.--"
 
     if [[ -f "${pass_dir}/${passfile}.gpg" ]]; then
@@ -363,8 +357,8 @@ generate() {
     else
         if [[ -f "${pass_dir}"/.gpg_key ]]; then
             gpg_key=$(<"${pass_dir}"/.gpg_key)
-            read -r -n "$length" password < <(LC_ALL=C tr -dc "[:punct:][:alnum:]" < /dev/urandom)
-            [[ ${#password} -eq $length ]] || die "Could not generate password from /dev/urandom."
+            read -r -n "${length}" password < <(LC_ALL=C tr -dc "[:punct:][:alnum:]" < /dev/urandom)
+            (( "${#password}" == length )) || die "Could not generate password from /dev/urandom."
 
             echo -e "${password}" > "/tmp/${passfile_temp}"
             gpg "${GPG_OPTS} --output ${pass_dir}/${passfile}.gpg --encrypt --recipient ${gpg_key} /tmp/${passfile_temp}"
@@ -381,7 +375,6 @@ generate() {
 #        Name: usage
 # Description: Prints the usage.
 #==============================================================================
-
 usage() {
 cat << EOF
     ${tbpm_description_color} - v${tbpm_version}
@@ -413,7 +406,6 @@ EOF
 #        Name: version
 # Description: Prints version information.
 #==============================================================================
-
 version() {
 cat << EOF
      _________   ______    ______    ____    ____
@@ -434,10 +426,14 @@ EOF
     exit 0
 }
 
+#=== FUNCTION =================================================================
+#        Name: main
+# Description: Main script logic
+#==============================================================================
 main() {
     (( "${#}" == 0 )) && usage
 
-    while [ "${1}" ]; do
+    while [[ "${1}" ]]; do
         case "${1}" in
             (-i|--init)     initialize "${@}"; shift 1 ;;
             (-w|--write)    write "${@}"; shift 1 ;;
@@ -456,6 +452,8 @@ main() {
     done
 }
 
+# Call main()
 main "${@}"
 
+# It's good habit to always exit 0 at the end of a script
 exit 0
