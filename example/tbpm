@@ -371,12 +371,12 @@ generate() {
 #==============================================================================
 
 usage() {
-    printf "
-    %s - v%s
+cat << EOF
+    $COLORDESCRIPTION - v$VERSION
 
     Usage:
-      %s <password>...
-      %s [options] [<password>]...
+      "$SCRIPTNAME" <password>...
+      "$SCRIPTNAME" [options] [<password>]...
 
     Options:
         -h, --help                  Display help.
@@ -392,8 +392,9 @@ usage() {
 
     --print Options:
         -c, --copy                  Copy a printed password using xclip.
-    \n" "$COLORDESCRIPTION" "$VERSION" "$SCRIPTNAME" "$SCRIPTNAME"
-      exit
+
+EOF
+      exit 0
 }
 
 #=== FUNCTION =================================================================
@@ -402,7 +403,7 @@ usage() {
 #==============================================================================
 
 version() {
-    printf "
+cat << EOF
      _________   ______    ______    ____    ____
     |  _   _  | |_   _ \  |_   __ \ |_   \  /   _|
     |_/ | | \_|   | |_) |   | |__) |  |   \/   |
@@ -410,22 +411,23 @@ version() {
        _| |_     _| |__) | _| |_     _| |_\/_| |_
       |_____|   |_______/ |_____|   |_____||_____|
 
-    %s - v%s
+    $COLORDESCRIPTION - v$VERSION
 
     This program may be freely redistributed under
     the terms of the GNU General Public License v3.0.
 
-    %s
-    \n" "$COLORDESCRIPTION" "$VERSION" "$AUTHOR"
-    exit
+    $AUTHOR
+
+EOF
+    exit 0
 }
 
 (( "${#}" == 0 )) && usage
 
 while [ "${1}" ]; do
     case "${1}" in
-        (-i|--init)     initialize "${@}"; shift ;;
-        (-w|--write)    write "${@}"; shift ;;
+        (-i|--init)     initialize "${@}"; shift 1 ;;
+        (-w|--write)    write "${@}"; shift 1 ;;
         (-p|--print)    print "${@}"; shift 1 ;;
         (-e|--edit)     edit "${@}"; shift 1 ;;
         (-l|--list)     list "${@}"; shift 1 ;;
