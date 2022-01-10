@@ -29,14 +29,14 @@ declare -r colArchBlue=$'\e[36m'  # Well, someone may call it Cyan
 declare -r colWhite=$'\e[37m'
 
 ## Script metadata
-SCRIPTNAME=${0##*/}
-VERSION="2021.12.12"
-DESCRIPTION="Terminal Based Password Manager"
-AUTHOR="The-Repo-Club <wayne6324@gmail.com>"
-COLORDESCRIPTION="${colBlue}T${txtClean}erminal ${colBlue}B${txtClean}ased ${colBlue}P${txtClean}assword ${colBlue}M${txtClean}anager"
+tbpm_scriptname=${0##*/}
+tbpm_version="2021.12.12"
+tbpm_description="Terminal Based Password Manager"
+tbpm_author="The-Repo-Club <wayne6324@gmail.com>"
+tbpm_description_color="${colBlue}T${txtClean}erminal ${colBlue}B${txtClean}ased ${colBlue}P${txtClean}assword ${colBlue}M${txtClean}anager"
 GPG_OPTS="--quiet --batch --use-agent"
 
-readonly SCRIPTNAME DESCRIPTION COLORDESCRIPTION VERSION AUTHOR
+readonly tbpm_scriptname tbpm_description tbpm_description_color tbpm_version tbpm_author
 
 # Get the top level PID and setup a trap so that we can call die() within subshells
 trap "exit 1" TERM
@@ -44,9 +44,9 @@ _self_pid="${$}"
 export _self_pid
 
 if [[ -z "$TBPM" ]]; then
-    passDir=$HOME/.tbpm
+    pass_dir=$HOME/.tbpm
 else
-    passDir=$TBPM
+    pass_dir=$TBPM
 fi
 
 #=== FUNCTION =================================================================
@@ -61,7 +61,6 @@ msg() {
     else
         printf "==> %s\n" "${*}"
     fi
-    exit 0
 }
 
 #=== FUNCTION =================================================================
@@ -120,9 +119,7 @@ confirm() {
 initialize() {
     local gpg_key=
 
-    if [[ ! -d $passDir ]]; then
-        mkdir -p $passDir
-    fi
+    mkdir -p "${pass_dir}" || die "Failed to create ${pass_dir}"
 
     if [[ $# -lt 2 ]]; then
         die "Not enough parameters supplied"
@@ -142,8 +139,8 @@ initialize() {
     if [ -z $gpg_key ]; then
         die "valid GPG does not exist!"
     else
-        echo $gpg_key > $passDir/.gpg_key
-        msg "GPG '${gpg_key}' has been saved to ${passDir}/.gpg_key"
+        echo $gpg_key > "${pass_dir}"/.gpg_key
+        msg "GPG '${gpg_key}' has been saved to ${pass_dir}/.gpg_key"
     fi
     exit
 }
@@ -168,19 +165,19 @@ write() {
     local password=$2
     local passfile_temp="${passfile}.tmp.${RANDOM}.${RANDOM}.${RANDOM}.${RANDOM}.--"
 
-    if [[ -f "${passDir}/${passfile}.gpg" ]]; then
-        if [[ -f $passDir/.gpg_key ]]; then
+    if [[ -f "${pass_dir}/${passfile}.gpg" ]]; then
+        if [[ -f "${pass_dir}"/.gpg_key ]]; then
             die "That password file already exists."
         else
             die "valid GPG does not exist!"
         fi
     else
-        if [[ -f $passDir/.gpg_key ]]; then
-            gpg_key=$(cat $passDir/.gpg_key)
+        if [[ -f "${pass_dir}"/.gpg_key ]]; then
+            gpg_key=$(cat "${pass_dir}"/.gpg_key)
             echo -e "${password}" > /tmp/${passfile_temp}
-            gpg ${GPG_OPTS} --output ${passDir}/${passfile}.gpg --encrypt --recipient ${gpg_key} /tmp/${passfile_temp}
+            gpg ${GPG_OPTS} --output ${pass_dir}/${passfile}.gpg --encrypt --recipient ${gpg_key} /tmp/${passfile_temp}
             rm -f /tmp/${passfile_temp}
-            msg "Password '${password}' has been saved to ${passDir}/${passfile}.gpg"
+            msg "Password '${password}' has been saved to ${pass_dir}/${passfile}.gpg"
         else
             die "valid GPG does not exist!"
         fi
@@ -213,16 +210,16 @@ print() {
     local passfile=${1%%-*}
     local passfile_temp="${passfile}.tmp.${RANDOM}.${RANDOM}.${RANDOM}.${RANDOM}.--"
 
-    if [[ -f "${passDir}/${passfile}.gpg" ]]; then
-        if [[ -f $passDir/.gpg_key ]]; then
-            gpg ${GPG_OPTS} --output /tmp/${passfile_temp} --decrypt ${passDir}/${passfile}.gpg
+    if [[ -f "${pass_dir}/${passfile}.gpg" ]]; then
+        if [[ -f "${pass_dir}"/.gpg_key ]]; then
+            gpg ${GPG_OPTS} --output /tmp/${passfile_temp} --decrypt ${pass_dir}/${passfile}.gpg
             password=$(cat /tmp/${passfile_temp})
             printf "%s: %s\n" "${passfile}" "${password}"
         else
             die "valid GPG does not exist!"
         fi
     else
-        if [[ -f $passDir/.gpg_key ]]; then
+        if [[ -f "${pass_dir}"/.gpg_key ]]; then
             die "That password file does not exists."
         else
             die "valid GPG does not exist!"
@@ -247,9 +244,9 @@ copy() {
     local passfile=${1%%-*}
     local passfile_temp="${passfile}.tmp.${RANDOM}.${RANDOM}.${RANDOM}.${RANDOM}.--"
 
-    if [[ -f "${passDir}/${passfile}.gpg" ]]; then
-        if [[ -f $passDir/.gpg_key ]]; then
-            gpg ${GPG_OPTS} --output /tmp/${passfile_temp} --decrypt ${passDir}/${passfile}.gpg
+    if [[ -f "${pass_dir}/${passfile}.gpg" ]]; then
+        if [[ -f "${pass_dir}"/.gpg_key ]]; then
+            gpg ${GPG_OPTS} --output /tmp/${passfile_temp} --decrypt ${pass_dir}/${passfile}.gpg
             password=$(cat /tmp/${passfile_temp})
             if command -v clipmenu-ctl &> /dev/null; then
                 clipmenu-ctl disable
@@ -264,7 +261,7 @@ copy() {
             die "valid GPG does not exist!"
         fi
     else
-        if [[ -f $passDir/.gpg_key ]]; then
+        if [[ -f "${pass_dir}"/.gpg_key ]]; then
             die "That password file does not exists."
         else
             die "valid GPG does not exist!"
@@ -287,13 +284,13 @@ list() {
         shift
     fi
 
-    if [[ -f $passDir/.gpg_key ]]; then
-        printf "%s\n" "${COLORDESCRIPTION}"
+    if [[ -f "${pass_dir}"/.gpg_key ]]; then
+        printf "%s\n" "${tbpm_description_color}"
         while read -r; do
-            if [[ ! "$REPLY" == "$passDir" ]]; then
+            if [[ ! "$REPLY" == ""${pass_dir}"" ]]; then
                 echo ${REPLY::-4}
             fi
-        done <<< $( tree -N -l --noreport --prune --matchdirs --ignore-case "$passDir" )
+        done <<< $( tree -N -l --noreport --prune --matchdirs --ignore-case ""${pass_dir}"" )
     else
         die "valid GPG does not exist!"
     fi
@@ -317,24 +314,24 @@ edit() {
     local passfile=$1
     local passfile_temp="${passfile}.tmp.${RANDOM}.${RANDOM}.${RANDOM}.${RANDOM}.--"
 
-    if [[ -f "${passDir}/${passfile}.gpg" ]]; then
-        if [[ -f $passDir/.gpg_key ]]; then
-            gpg ${GPG_OPTS} --output /tmp/${passfile_temp} --decrypt ${passDir}/${passfile}.gpg
+    if [[ -f "${pass_dir}/${passfile}.gpg" ]]; then
+        if [[ -f "${pass_dir}"/.gpg_key ]]; then
+            gpg ${GPG_OPTS} --output /tmp/${passfile_temp} --decrypt ${pass_dir}/${passfile}.gpg
             ${VISUAL:-vim} "/tmp/$passfile_temp"
             password=$(cat /tmp/${passfile_temp})
 	        [[ -f "/tmp/$passfile_temp" ]] || die "New password not saved."
-            gpg -d -o - ${GPG_OPTS} "${passDir}/${passfile}.gpg" 2>/dev/null | diff - "/tmp/$passfile_temp" &>/dev/null && die "Password unchanged."
-            gpg_key=$(cat $passDir/.gpg_key)
-            while ! gpg --yes ${GPG_OPTS} --output ${passDir}/${passfile}.gpg --encrypt --recipient ${gpg_key} /tmp/${passfile_temp}; do
+            gpg -d -o - ${GPG_OPTS} "${pass_dir}/${passfile}.gpg" 2>/dev/null | diff - "/tmp/$passfile_temp" &>/dev/null && die "Password unchanged."
+            gpg_key=$(cat "${pass_dir}"/.gpg_key)
+            while ! gpg --yes ${GPG_OPTS} --output ${pass_dir}/${passfile}.gpg --encrypt --recipient ${gpg_key} /tmp/${passfile_temp}; do
                 confirm "GPG encryption failed. Would you like to try again"
             done
             rm -f /tmp/${passfile_temp}
-            msg "${VISUAL:-vim}: Password '${password%%$'\n'*}' has been saved to ${passDir}/${passfile}.gpg"
+            msg "${VISUAL:-vim}: Password '${password%%$'\n'*}' has been saved to ${pass_dir}/${passfile}.gpg"
         else
             die "valid GPG does not exist!"
         fi
     else
-        if [[ -f $passDir/.gpg_key ]]; then
+        if [[ -f "${pass_dir}"/.gpg_key ]]; then
             die "That password file does not exists."
         else
             die "valid GPG does not exist!"
@@ -365,22 +362,22 @@ generate() {
 	[[ $length -gt 0 ]] || die "password length must be greater than zero."
     local passfile_temp="${passfile}.tmp.${RANDOM}.${RANDOM}.${RANDOM}.${RANDOM}.--"
 
-    if [[ -f "${passDir}/${passfile}.gpg" ]]; then
-        if [[ -f $passDir/.gpg_key ]]; then
+    if [[ -f "${pass_dir}/${passfile}.gpg" ]]; then
+        if [[ -f "${pass_dir}"/.gpg_key ]]; then
             die "That password file already exists."
         else
             die "valid GPG does not exist!"
         fi
     else
-        if [[ -f $passDir/.gpg_key ]]; then
-            gpg_key=$(cat $passDir/.gpg_key)
+        if [[ -f "${pass_dir}"/.gpg_key ]]; then
+            gpg_key=$(cat "${pass_dir}"/.gpg_key)
             read -r -n $length password < <(LC_ALL=C tr -dc "[:punct:][:alnum:]" < /dev/urandom)
             [[ ${#password} -eq $length ]] || die "Could not generate password from /dev/urandom."
 
             echo -e "${password}" > /tmp/${passfile_temp}
-            gpg ${GPG_OPTS} --output ${passDir}/${passfile}.gpg --encrypt --recipient ${gpg_key} /tmp/${passfile_temp}
+            gpg ${GPG_OPTS} --output ${pass_dir}/${passfile}.gpg --encrypt --recipient ${gpg_key} /tmp/${passfile_temp}
             rm -f /tmp/${passfile_temp}
-            msg "Password '${password}' has been saved to ${passDir}/${passfile}.gpg"
+            msg "Password '${password}' has been saved to ${pass_dir}/${passfile}.gpg"
         else
             die "valid GPG does not exist!"
         fi
@@ -395,11 +392,11 @@ generate() {
 
 usage() {
 cat << EOF
-    $COLORDESCRIPTION - v$VERSION
+    $tbpm_description_color - v$tbpm_version
 
     Usage:
-      "$SCRIPTNAME" <password>...
-      "$SCRIPTNAME" [options] [<password>]...
+      "$tbpm_scriptname" <password>...
+      "$tbpm_scriptname" [options] [<password>]...
 
     Options:
         -h, --help                  Display help.
@@ -434,12 +431,12 @@ cat << EOF
        _| |_     _| |__) | _| |_     _| |_\/_| |_
       |_____|   |_______/ |_____|   |_____||_____|
 
-    $COLORDESCRIPTION - v$VERSION
+    $tbpm_description_color - v$tbpm_version
 
     This program may be freely redistributed under
     the terms of the GNU General Public License v3.0.
 
-    $AUTHOR
+    $tbpm_author
 
 EOF
     exit 0
