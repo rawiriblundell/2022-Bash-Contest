@@ -44,9 +44,9 @@ _self_pid="${$}"
 export _self_pid
 
 if [[ -z "$TBPM" ]]; then
-    pass_dir=$HOME/.tbpm
+    PASSWORD_STORE_DIR=$HOME/.tbpm
 else
-    pass_dir=$TBPM
+    PASSWORD_STORE_DIR=$TBPM
 fi
 
 #=== FUNCTION =================================================================
@@ -142,6 +142,69 @@ validate_param_count() {
 }
 
 #=== FUNCTION =================================================================
+#        Name: get_newest_commit_date
+# Description: Get the latest commit timestamp for a given file
+# Parameter 1: File to report on
+#==============================================================================
+get_newest_commit_date() {
+    # Output in epoch time for easy sorting, followed by relative date
+    git --no-pager log -1 --pretty=format:'%ct (%cr)' -- "${1:?No file specified}"
+}
+
+#=== FUNCTION =================================================================
+#        Name: audit
+# Description: audit and report on the ages of all contained password files
+# Parameter 1: [all,pwds,subfolder,file,glob].  If blank, all .gpg files are processed.
+#==============================================================================
+audit() {
+    (
+        cd "${PASSWORD_STORE_DIR}" || exit 1
+        local ls_filter fsobj fsobj_len printf_fmt col2_align passpath
+        case "${1}" in
+            (all)       ls_filter='.' ;;
+            (''|pwds)   ls_filter='*.gpg' ;;
+            (*)
+                # shellcheck disable=SC2068 # We want word splitting here
+                for fsobj in ${@}; do
+                    fsobj="${fsobj#/}"                               # Strip any leading slash
+                    [[ -f "${fsobj}.gpg" ]] && fsobj="${fsobj}.gpg"  # Auto-append .gpg extension
+                    ls_filter="${ls_filter} ${fsobj}"
+                done
+            ;;
+        esac
+
+        # Find the length of the longest filename, this informs our output format
+        fsobj_len=0
+        # shellcheck disable=SC2086 # We need ls_filter to word split
+        while read -r; do
+            (( "${#REPLY}" > fsobj_len )) && fsobj_len="${#REPLY}"
+        done < <(git ls-files ${ls_filter:-.})
+
+        # Adjust output based on (longest filename + padding + date output) vs terminal width...
+        if (( (fsobj_len + 4 + 36) < "${COLUMNS:-$(tput cols)}" )); then
+            col2_align="$(( fsobj_len + 4 ))"
+            printf_fmt="%-${col2_align}s %s\\n"
+            printf -- "%-${col2_align}s %s\\n" "Filename" "Last Commit"
+        else
+            printf_fmt='\nFilename: %s\nLast Commit: %s\n'
+        fi
+
+        # Loop through our files
+        # shellcheck disable=SC2086 # We need ls_filter to word split
+        while read -r; do
+            # Strip the .gpg extension in the output
+            case "${REPLY}" in
+                (*.gpg) passpath="${REPLY/.gpg/}" ;;
+                (*)     passpath="${REPLY}" ;;
+            esac
+
+            # shellcheck disable=SC2059
+            printf -- "${printf_fmt}" "${passpath}" "$(get_newest_commit_date "${REPLY}")"
+        done < <(git ls-files ${ls_filter:-.})
+    )
+}
+
+#=== FUNCTION =================================================================
 #        Name: initialize
 # Description: Initialize the password manager.
 # Parameter 1: GPG key.
@@ -149,21 +212,21 @@ validate_param_count() {
 initialize() {
     local gpg_key=
 
-    mkdir -p "${pass_dir}" || die "Failed to create ${pass_dir}"
+    mkdir -p "${PASSWORD_STORE_DIR}" || die "Failed to create ${PASSWORD_STORE_DIR}"
     validate_param_count 2 "${#}"
     shift
 
-    local key=$1
+    local key="${1}"
     while read -r gpg_id; do
         if [[ "$gpg_id" = "$key" ]]; then
-            gpg_key=$gpg_id
+            gpg_key="${gpg_id}"
         fi
     done < <(gpg --list-keys)
 
     [[ -z "${gpg_key}" ]] && die "valid GPG does not exist!"
 
-    echo "${gpg_key}" > "${pass_dir}"/.gpg_key
-    msg "GPG '${gpg_key}' has been saved to ${pass_dir}/.gpg_key"
+    echo "${gpg_key}" > "${PASSWORD_STORE_DIR}"/.gpg_key
+    msg "GPG '${gpg_key}' has been saved to ${PASSWORD_STORE_DIR}/.gpg_key"
 
     exit 0
 }
@@ -178,23 +241,23 @@ write() {
     validate_param_count 3 "${#}"
     shift
 
-    local passfile=$1
-    local password=$2
+    local passfile="${1}"
+    local password="${2}"
     local passfile_temp="${passfile}.tmp.${RANDOM}.${RANDOM}.${RANDOM}.${RANDOM}.--"
 
-    if [[ -f "${pass_dir}/${passfile}.gpg" ]]; then
-        if [[ -f "${pass_dir}"/.gpg_key ]]; then
+    if [[ -f "${PASSWORD_STORE_DIR}/${passfile}.gpg" ]]; then
+        if [[ -f "${PASSWORD_STORE_DIR}"/.gpg_key ]]; then
             die "That password file already exists."
         else
             die "valid GPG does not exist!"
         fi
     else
-        if [[ -f "${pass_dir}"/.gpg_key ]]; then
-            gpg_key=$(cat "${pass_dir}"/.gpg_key)
+        if [[ -f "${PASSWORD_STORE_DIR}"/.gpg_key ]]; then
+            gpg_key=$(cat "${PASSWORD_STORE_DIR}"/.gpg_key)
             echo -e "${password}" > /tmp/"${passfile_temp}"
-            gpg "${GPG_OPTS} --output ${pass_dir}/${passfile}.gpg --encrypt --recipient ${gpg_key} /tmp/${passfile_temp}"
+            gpg "${GPG_OPTS} --output ${PASSWORD_STORE_DIR}/${passfile}.gpg --encrypt --recipient ${gpg_key} /tmp/${passfile_temp}"
             rm -f "/tmp/${passfile_temp}"
-            msg "Password '${password}' has been saved to ${pass_dir}/${passfile}.gpg"
+            msg "Password '${password}' has been saved to ${PASSWORD_STORE_DIR}/${passfile}.gpg"
         else
             die "valid GPG does not exist!"
         fi
@@ -208,7 +271,7 @@ write() {
 # Parameter 1: the file name without .gpg.
 #==============================================================================
 print() {
-    case $3 in
+    case "${3}" in
         (-c|--copy) shift; copy "${@}" ;;
     esac
 
@@ -218,16 +281,16 @@ print() {
     local passfile=${1%%-*}
     local passfile_temp="${passfile}.tmp.${RANDOM}.${RANDOM}.${RANDOM}.${RANDOM}.--"
 
-    if [[ -f "${pass_dir}/${passfile}.gpg" ]]; then
-        if [[ -f "${pass_dir}"/.gpg_key ]]; then
-            gpg "${GPG_OPTS} --output /tmp/${passfile_temp} --decrypt ${pass_dir}/${passfile}.gpg"
+    if [[ -f "${PASSWORD_STORE_DIR}/${passfile}.gpg" ]]; then
+        if [[ -f "${PASSWORD_STORE_DIR}"/.gpg_key ]]; then
+            gpg "${GPG_OPTS} --output /tmp/${passfile_temp} --decrypt ${PASSWORD_STORE_DIR}/${passfile}.gpg"
             password=$(<"/tmp/${passfile_temp}")
             printf -- '%s: %s\n' "${passfile}" "${password}"
         else
             die "valid GPG does not exist!"
         fi
     else
-        if [[ -f "${pass_dir}"/.gpg_key ]]; then
+        if [[ -f "${PASSWORD_STORE_DIR}"/.gpg_key ]]; then
             die "That password file does not exists."
         else
             die "valid GPG does not exist!"
@@ -244,12 +307,12 @@ print() {
 copy() {
     validate_param_count 2 "${#}"
 
-    local passfile=${1%%-*}
+    local passfile="${1%%-*}"
     local passfile_temp="${passfile}.tmp.${RANDOM}.${RANDOM}.${RANDOM}.${RANDOM}.--"
 
-    if [[ -f "${pass_dir}/${passfile}.gpg" ]]; then
-        if [[ -f "${pass_dir}"/.gpg_key ]]; then
-            gpg "${GPG_OPTS} --output /tmp/${passfile_temp} --decrypt ${pass_dir}/${passfile}.gpg"
+    if [[ -f "${PASSWORD_STORE_DIR}/${passfile}.gpg" ]]; then
+        if [[ -f "${PASSWORD_STORE_DIR}"/.gpg_key ]]; then
+            gpg "${GPG_OPTS} --output /tmp/${passfile_temp} --decrypt ${PASSWORD_STORE_DIR}/${passfile}.gpg"
             password=$(<"/tmp/${passfile_temp}")
             if command -v clipmenu-ctl &> /dev/null; then
                 clipmenu-ctl disable
@@ -264,7 +327,7 @@ copy() {
             die "valid GPG does not exist!"
         fi
     else
-        if [[ -f "${pass_dir}"/.gpg_key ]]; then
+        if [[ -f "${PASSWORD_STORE_DIR}"/.gpg_key ]]; then
             die "That password file does not exists."
         else
             die "valid GPG does not exist!"
@@ -281,13 +344,13 @@ list() {
     validate_param_count 1 "${#}"
     shift
 
-    if [[ -f "${pass_dir}"/.gpg_key ]]; then
+    if [[ -f "${PASSWORD_STORE_DIR}"/.gpg_key ]]; then
         printf "%s\n" "${tbpm_description_color}"
         while read -r; do
-            if [[ ! "$REPLY" = "${pass_dir}" ]]; then
+            if [[ ! "$REPLY" = "${PASSWORD_STORE_DIR}" ]]; then
                 echo "${REPLY::-4}"
             fi
-        done < <(tree -N -l --noreport --prune --matchdirs --ignore-case "${pass_dir}")
+        done < <(tree -N -l --noreport --prune --matchdirs --ignore-case "${PASSWORD_STORE_DIR}")
     else
         die "valid GPG does not exist!"
     fi
@@ -302,28 +365,28 @@ edit() {
     validate_param_count 2 "${#}"
     shift
 
-    local passfile=$1
+    local passfile="${1}"
     local passfile_temp="${passfile}.tmp.${RANDOM}.${RANDOM}.${RANDOM}.${RANDOM}.--"
 
-    if [[ -f "${pass_dir}/${passfile}.gpg" ]]; then
-        if [[ -f "${pass_dir}"/.gpg_key ]]; then
-            gpg "${GPG_OPTS} --output /tmp/${passfile_temp} --decrypt ${pass_dir}/${passfile}.gpg"
+    if [[ -f "${PASSWORD_STORE_DIR}/${passfile}.gpg" ]]; then
+        if [[ -f "${PASSWORD_STORE_DIR}"/.gpg_key ]]; then
+            gpg "${GPG_OPTS} --output /tmp/${passfile_temp} --decrypt ${PASSWORD_STORE_DIR}/${passfile}.gpg"
             ${VISUAL:-vim} "/tmp/$passfile_temp"
             password=$(<"/tmp/${passfile_temp}")
 	        [[ -f "/tmp/$passfile_temp" ]] || die "New password not saved."
-            gpg "-d -o - ${GPG_OPTS}" "${pass_dir}/${passfile}.gpg" 2>/dev/null | 
+            gpg "-d -o - ${GPG_OPTS}" "${PASSWORD_STORE_DIR}/${passfile}.gpg" 2>/dev/null | 
                 diff - "/tmp/$passfile_temp" &>/dev/null && die "Password unchanged."
-            gpg_key=$(<"${pass_dir}"/.gpg_key)
-            while ! gpg "--yes ${GPG_OPTS} --output ${pass_dir}/${passfile}.gpg --encrypt --recipient ${gpg_key} /tmp/${passfile_temp}"; do
+            gpg_key=$(<"${PASSWORD_STORE_DIR}"/.gpg_key)
+            while ! gpg "--yes ${GPG_OPTS} --output ${PASSWORD_STORE_DIR}/${passfile}.gpg --encrypt --recipient ${gpg_key} /tmp/${passfile_temp}"; do
                 confirm "GPG encryption failed. Would you like to try again"
             done
             rm -f "/tmp/${passfile_temp}"
-            msg "${VISUAL:-vim}: Password '${password%%$'\n'*}' has been saved to ${pass_dir}/${passfile}.gpg"
+            msg "${VISUAL:-vim}: Password '${password%%$'\n'*}' has been saved to ${PASSWORD_STORE_DIR}/${passfile}.gpg"
         else
             die "valid GPG does not exist!"
         fi
     else
-        if [[ -f "${pass_dir}"/.gpg_key ]]; then
+        if [[ -f "${PASSWORD_STORE_DIR}"/.gpg_key ]]; then
             die "That password file does not exists."
         else
             die "valid GPG does not exist!"
@@ -342,28 +405,28 @@ generate() {
     validate_param_count 3 "${#}"
     shift
 
-    local passfile=$1
-    local length=$2
+    local passfile="${1}"
+    local length="${2}"
     is_integer "${length}" || die "password length \"$length\" must be a number."
 	(( length > 0 )) || die "password length must be greater than zero."
     local passfile_temp="${passfile}.tmp.${RANDOM}.${RANDOM}.${RANDOM}.${RANDOM}.--"
 
-    if [[ -f "${pass_dir}/${passfile}.gpg" ]]; then
-        if [[ -f "${pass_dir}"/.gpg_key ]]; then
+    if [[ -f "${PASSWORD_STORE_DIR}/${passfile}.gpg" ]]; then
+        if [[ -f "${PASSWORD_STORE_DIR}"/.gpg_key ]]; then
             die "That password file already exists."
         else
             die "valid GPG does not exist!"
         fi
     else
-        if [[ -f "${pass_dir}"/.gpg_key ]]; then
-            gpg_key=$(<"${pass_dir}"/.gpg_key)
+        if [[ -f "${PASSWORD_STORE_DIR}"/.gpg_key ]]; then
+            gpg_key=$(<"${PASSWORD_STORE_DIR}"/.gpg_key)
             read -r -n "${length}" password < <(LC_ALL=C tr -dc "[:punct:][:alnum:]" < /dev/urandom)
             (( "${#password}" == length )) || die "Could not generate password from /dev/urandom."
 
             echo -e "${password}" > "/tmp/${passfile_temp}"
-            gpg "${GPG_OPTS} --output ${pass_dir}/${passfile}.gpg --encrypt --recipient ${gpg_key} /tmp/${passfile_temp}"
+            gpg "${GPG_OPTS} --output ${PASSWORD_STORE_DIR}/${passfile}.gpg --encrypt --recipient ${gpg_key} /tmp/${passfile_temp}"
             rm -f "/tmp/${passfile_temp}"
-            msg "Password '${password}' has been saved to ${pass_dir}/${passfile}.gpg"
+            msg "Password '${password}' has been saved to ${PASSWORD_STORE_DIR}/${passfile}.gpg"
         else
             die "valid GPG does not exist!"
         fi
@@ -384,8 +447,9 @@ cat << EOF
       "${tbpm_scriptname}" [options] [<password>]...
 
     Options:
+        -a, --audit                 Audit and report on aged passwords.
         -h, --help                  Display help.
-        -w, --write                 Wite a password to the database.
+        -w, --write                 Write a password to the database.
         -g, --generate              Generate a password.
         -e, --edit                  Edit a password.
         -d, --delete                Delete a password.
@@ -433,8 +497,18 @@ EOF
 main() {
     (( "${#}" == 0 )) && usage
 
+    # Fail early if we don't have the commands that we need
+    for cmd in git gpg; do
+        ! command -v "${cmd}" >/dev/null 2>&1 && failed_cmds=",${cmd}"
+    done
+
+    if (( "${#failed_cmds/,/}" > 0 )); then
+        die "The following commands were required but not found: ${failed_cmds/,/}"
+    fi
+
     while [[ "${1}" ]]; do
         case "${1}" in
+            (-a|--audit)    audit "${1}" ;;
             (-i|--init)     initialize "${@}"; shift 1 ;;
             (-w|--write)    write "${@}"; shift 1 ;;
             (-p|--print)    print "${@}"; shift 1 ;;
